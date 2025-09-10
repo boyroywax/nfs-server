@@ -76,10 +76,10 @@ services:
 
 ```bash
 # Deploy to default namespace
-kubectl apply -f https://raw.githubusercontent.com/pocketminers/nfs-server/main/examples/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/boyroywax/nfs-server/main/examples/deployment.yaml
 
 # Deploy to specific namespace
-kubectl apply -f https://raw.githubusercontent.com/pocketminers/nfs-server/main/examples/deployment.yaml -n your-namespace
+kubectl apply -f https://raw.githubusercontent.com/boyroywax/nfs-server/main/examples/deployment.yaml -n your-namespace
 ```
 
 ### Custom Deployment
