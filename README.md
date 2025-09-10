@@ -76,10 +76,10 @@ services:
 
 ```bash
 # Deploy to default namespace
-kubectl apply -f https://raw.githubusercontent.com/pocketminers/nfs-server/main/examples/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/boyroywax/nfs-server/main/examples/deployment.yaml
 
 # Deploy to specific namespace
-kubectl apply -f https://raw.githubusercontent.com/pocketminers/nfs-server/main/examples/deployment.yaml -n your-namespace
+kubectl apply -f https://raw.githubusercontent.com/boyroywax/nfs-server/main/examples/deployment.yaml -n your-namespace
 ```
 
 ### Custom Deployment
@@ -353,4 +353,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Built with ❤️ for the cloud-native community.
 
-For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/pocketminers/nfs-server).
+For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/boyroywax/nfs-server).
