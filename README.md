@@ -86,7 +86,7 @@ kubectl apply -f https://raw.githubusercontent.com/boyroywax/nfs-server/main/exa
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/pocketminers/nfs-server.git
+   git clone https://github.com/boyroywax/nfs-server.git
    cd nfs-server
    ```
 
@@ -304,7 +304,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/pocketminers/nfs-server.git
+   git clone https://github.com/boyroywax/nfs-server.git
    cd nfs-server
    ```
 
