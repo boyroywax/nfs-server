@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-data-pvc
+  labels:
+    app: nfs-server
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # Uncomment and modify if you have a specific storage class
+  # storageClassName: fast-ssd
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server-with-pvc
+  labels:
+    app: nfs-server-with-pvc
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Required for PVC
+  selector:
+    matchLabels:
+      app: nfs-server-with-pvc
+  template:
+    metadata:
+      labels:
+        app: nfs-server-with-pvc
+        version: v1.0.0
+    spec:
+      containers:
+      - name: nfs-server
+        image: boyroywax/nfs-server:1.0.0
+        securityContext:
+          privileged: true
+        env:
+        - name: SHARE_NAME
+          value: "persistent-storage"
+        - name: CLIENT_CIDR
+          value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+        - name: NFS_OPTIONS
+          value: "rw,sync,no_subtree_check,no_root_squash,insecure"
+        ports:
+        - name: nfs
+          containerPort: 2049
+          protocol: TCP
+        - name: mountd
+          containerPort: 20048
+          protocol: TCP
+        - name: rpcbind
+          containerPort: 111
+          protocol: TCP
+        - name: rpcbind-udp
+          containerPort: 111
+          protocol: UDP
+        volumeMounts:
+        - name: persistent-data
+          mountPath: /nfsshare/data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "rpcinfo -p localhost | grep -q nfs"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "showmount -e localhost"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "showmount -e localhost"
+          initialDelaySeconds: 5
+          periodSeconds: 2
+          timeoutSeconds: 3
+          failureThreshold: 30
+      volumes:
+      - name: persistent-data
+        persistentVolumeClaim:
+          claimName: nfs-data-pvc
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server-with-pvc
+  labels:
+    app: nfs-server-with-pvc
+spec:
+  type: ClusterIP
+  selector:
+    app: nfs-server-with-pvc
+  ports:
+  - name: nfs
+    port: 2049
+    targetPort: 2049
+    protocol: TCP
+  - name: mountd
+    port: 20048
+    targetPort: 20048
+    protocol: TCP
+  - name: rpcbind-tcp
+    port: 111
+    targetPort: 111
+    protocol: TCP
+  - name: rpcbind-udp
+    port: 111
+    targetPort: 111
+    protocol: UDP
+---
+# Example PersistentVolume using this NFS server
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-shared-pv
+  labels:
+    type: nfs
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: nfs-server-with-pvc.default.svc.cluster.local
+    path: "/"
+  mountOptions:
+    - nfsvers=4.1
+    - proto=tcp
+    - hard
+    - intr
+---
+# Example PersistentVolumeClaim for clients
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-client-pvc
+  labels:
+    app: nfs-client
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  selector:
+    matchLabels:
+      type: nfs

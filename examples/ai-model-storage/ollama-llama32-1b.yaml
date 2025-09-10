@@ -1,0 +1,246 @@
+---
+# NFS Server for LLaMA 3.2 1B Model Storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server-llama32-1b
+  labels:
+    app: nfs-server-llama32-1b
+    model: llama32-1b
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nfs-server-llama32-1b
+  template:
+    metadata:
+      labels:
+        app: nfs-server-llama32-1b
+        model: llama32-1b
+        version: v1.0.0
+    spec:
+      containers:
+      - name: nfs-server
+        image: boyroywax/nfs-server:1.0.0
+        securityContext:
+          privileged: true
+        env:
+        - name: SHARE_NAME
+          value: "llama32-1b-models"
+        - name: CLIENT_CIDR
+          value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+        - name: NFS_OPTIONS
+          value: "rw,async,no_subtree_check,no_root_squash,insecure"
+        ports:
+        - name: nfs
+          containerPort: 2049
+        - name: mountd
+          containerPort: 20048
+        - name: rpcbind
+          containerPort: 111
+        volumeMounts:
+        - name: model-storage
+          mountPath: /nfsshare/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "rpcinfo -p localhost | grep -q nfs"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "showmount -e localhost"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: llama32-1b-pvc
+---
+# Persistent Volume Claim for model storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama32-1b-pvc
+  labels:
+    app: nfs-server-llama32-1b
+    model: llama32-1b
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi
+  # Uncomment if you have a specific storage class for models
+  # storageClassName: fast-ssd
+---
+# Service for NFS server
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server-llama32-1b
+  labels:
+    app: nfs-server-llama32-1b
+    model: llama32-1b
+spec:
+  type: ClusterIP
+  selector:
+    app: nfs-server-llama32-1b
+  ports:
+  - name: nfs
+    port: 2049
+    targetPort: 2049
+  - name: mountd
+    port: 20048
+    targetPort: 20048
+  - name: rpcbind-tcp
+    port: 111
+    targetPort: 111
+    protocol: TCP
+  - name: rpcbind-udp
+    port: 111
+    targetPort: 111
+    protocol: UDP
+---
+# Ollama deployment using the shared NFS storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-llama32-1b
+  labels:
+    app: ollama
+    model: llama32-1b
+spec:
+  replicas: 2  # Scale inference across multiple pods
+  selector:
+    matchLabels:
+      app: ollama
+      model: llama32-1b
+  template:
+    metadata:
+      labels:
+        app: ollama
+        model: llama32-1b
+    spec:
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        env:
+        - name: OLLAMA_MODELS
+          value: "/models"
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        ports:
+        - name: http
+          containerPort: 11434
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 60
+          periodSeconds: 30
+      volumes:
+      - name: models
+        nfs:
+          server: nfs-server-llama32-1b.default.svc.cluster.local
+          path: "/"
+      initContainers:
+      - name: model-downloader
+        image: ollama/ollama:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          export OLLAMA_MODELS=/models
+          if [ ! -f /models/llama3.2:1b ]; then
+            echo "Downloading LLaMA 3.2 1B model..."
+            ollama pull llama3.2:1b
+          else
+            echo "Model already exists, skipping download"
+          fi
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+---
+# Service for Ollama inference
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-llama32-1b
+  labels:
+    app: ollama
+    model: llama32-1b
+spec:
+  type: ClusterIP
+  selector:
+    app: ollama
+    model: llama32-1b
+  ports:
+  - name: http
+    port: 11434
+    targetPort: 11434
+---
+# Optional: ConfigMap for model management scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ollama-scripts
+  labels:
+    app: ollama
+    model: llama32-1b
+data:
+  download-model.sh: |
+    #!/bin/bash
+    export OLLAMA_MODELS=/models
+    echo "Downloading LLaMA 3.2 1B model..."
+    ollama pull llama3.2:1b
+    echo "Model download complete"
+  
+  test-inference.sh: |
+    #!/bin/bash
+    echo "Testing LLaMA 3.2 1B inference..."
+    curl -X POST http://ollama-llama32-1b:11434/api/generate \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "llama3.2:1b",
+        "prompt": "What is the capital of France?",
+        "stream": false
+      }'

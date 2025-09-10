@@ -1,0 +1,391 @@
+---
+# NFS Server for Jupyter Notebook and Data Storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server-jupyter
+  labels:
+    app: nfs-server-jupyter
+    purpose: jupyter-storage
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nfs-server-jupyter
+  template:
+    metadata:
+      labels:
+        app: nfs-server-jupyter
+        purpose: jupyter-storage
+        version: v1.0.0
+    spec:
+      containers:
+      - name: nfs-server
+        image: boyroywax/nfs-server:1.0.0
+        securityContext:
+          privileged: true
+        env:
+        - name: SHARE_NAME
+          value: "jupyter-shared-storage"
+        - name: CLIENT_CIDR
+          value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+        - name: NFS_OPTIONS
+          value: "rw,sync,no_subtree_check,no_root_squash,insecure"
+        ports:
+        - name: nfs
+          containerPort: 2049
+        - name: mountd
+          containerPort: 20048
+        - name: rpcbind
+          containerPort: 111
+        volumeMounts:
+        - name: jupyter-storage
+          mountPath: /nfsshare/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "rpcinfo -p localhost | grep -q nfs"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "showmount -e localhost"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: jupyter-storage
+        persistentVolumeClaim:
+          claimName: jupyter-storage-pvc
+---
+# PVC for Jupyter shared storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jupyter-storage-pvc
+  labels:
+    app: nfs-server-jupyter
+    purpose: jupyter-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  # storageClassName: standard-rwo
+---
+# Service for Jupyter NFS server
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server-jupyter
+  labels:
+    app: nfs-server-jupyter
+    purpose: jupyter-storage
+spec:
+  type: ClusterIP
+  selector:
+    app: nfs-server-jupyter
+  ports:
+  - name: nfs
+    port: 2049
+    targetPort: 2049
+  - name: mountd
+    port: 20048
+    targetPort: 20048
+  - name: rpcbind-tcp
+    port: 111
+    targetPort: 111
+    protocol: TCP
+  - name: rpcbind-udp
+    port: 111
+    targetPort: 111
+    protocol: UDP
+---
+# JupyterHub deployment with shared storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jupyterhub
+  labels:
+    app: jupyterhub
+    component: hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jupyterhub
+      component: hub
+  template:
+    metadata:
+      labels:
+        app: jupyterhub
+        component: hub
+    spec:
+      containers:
+      - name: jupyterhub
+        image: jupyterhub/jupyterhub:4.0
+        ports:
+        - name: http
+          containerPort: 8000
+        env:
+        - name: JUPYTERHUB_CRYPT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jupyterhub-secret
+              key: crypt-key
+        volumeMounts:
+        - name: jupyterhub-config
+          mountPath: /etc/jupyterhub
+        - name: shared-notebooks
+          mountPath: /shared-notebooks
+        - name: shared-data
+          mountPath: /shared-data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        command:
+        - jupyterhub
+        - --config=/etc/jupyterhub/jupyterhub_config.py
+      volumes:
+      - name: jupyterhub-config
+        configMap:
+          name: jupyterhub-config
+      - name: shared-notebooks
+        nfs:
+          server: nfs-server-jupyter.default.svc.cluster.local
+          path: "/notebooks"
+      - name: shared-data
+        nfs:
+          server: nfs-server-jupyter.default.svc.cluster.local
+          path: "/data"
+---
+# Service for JupyterHub
+apiVersion: v1
+kind: Service
+metadata:
+  name: jupyterhub
+  labels:
+    app: jupyterhub
+spec:
+  type: LoadBalancer  # Change to ClusterIP if using ingress
+  selector:
+    app: jupyterhub
+    component: hub
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+---
+# Secret for JupyterHub
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jupyterhub-secret
+type: Opaque
+data:
+  # Generate with: openssl rand -hex 32 | base64
+  crypt-key: YzA4ZjU5YWE4NzIxNGQ5Y2EzZjhiODE0YjI3MjZkNzU4ZGQzOWIzMzQ0YzQ5YTBkMzA2YWRjOGY2YThlMzYyNA==
+---
+# ConfigMap for JupyterHub configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jupyterhub-config
+  labels:
+    app: jupyterhub
+data:
+  jupyterhub_config.py: |
+    import os
+    
+    # JupyterHub configuration for Kubernetes with shared NFS storage
+    
+    # Basic hub configuration
+    c.JupyterHub.bind_url = 'http://0.0.0.0:8000'
+    c.JupyterHub.hub_bind_url = 'http://0.0.0.0:8081'
+    
+    # Use KubernetesSpawner for launching user pods
+    c.JupyterHub.spawner_class = 'kubespawner.KubernetesSpawner'
+    
+    # Spawner configuration
+    c.KubernetesSpawner.image = 'jupyter/scipy-notebook:latest'
+    c.KubernetesSpawner.start_timeout = 300
+    c.KubernetesSpawner.http_timeout = 120
+    
+    # Shared storage configuration
+    c.KubernetesSpawner.volumes = [
+        {
+            'name': 'shared-notebooks',
+            'nfs': {
+                'server': 'nfs-server-jupyter.default.svc.cluster.local',
+                'path': '/notebooks'
+            }
+        },
+        {
+            'name': 'shared-data',
+            'nfs': {
+                'server': 'nfs-server-jupyter.default.svc.cluster.local',
+                'path': '/data'
+            }
+        }
+    ]
+    
+    c.KubernetesSpawner.volume_mounts = [
+        {
+            'mountPath': '/home/jovyan/shared-notebooks',
+            'name': 'shared-notebooks'
+        },
+        {
+            'mountPath': '/home/jovyan/shared-data',
+            'name': 'shared-data'
+        }
+    ]
+    
+    # Resource limits
+    c.KubernetesSpawner.cpu_limit = 2
+    c.KubernetesSpawner.mem_limit = '4G'
+    c.KubernetesSpawner.cpu_guarantee = 0.5
+    c.KubernetesSpawner.mem_guarantee = '1G'
+    
+    # Authentication (simple dummy auth for demo)
+    c.JupyterHub.authenticator_class = 'dummy'
+    c.DummyAuthenticator.password = 'jupyter'
+    
+    # Admin users
+    c.Authenticator.admin_users = {'admin'}
+    
+    # Enable shared notebooks in user environment
+    c.KubernetesSpawner.environment = {
+        'SHARED_NOTEBOOKS_PATH': '/home/jovyan/shared-notebooks',
+        'SHARED_DATA_PATH': '/home/jovyan/shared-data'
+    }
+---
+# Example notebook initialization job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jupyter-setup
+  labels:
+    app: jupyter-setup
+spec:
+  template:
+    metadata:
+      labels:
+        app: jupyter-setup
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: setup
+        image: alpine:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache curl
+          
+          # Create directory structure
+          mkdir -p /shared/notebooks/examples
+          mkdir -p /shared/notebooks/tutorials
+          mkdir -p /shared/notebooks/projects
+          mkdir -p /shared/data/datasets
+          mkdir -p /shared/data/models
+          mkdir -p /shared/data/results
+          
+          # Create example notebooks
+          cat > /shared/notebooks/examples/welcome.ipynb << 'EOF'
+          {
+           "cells": [
+            {
+             "cell_type": "markdown",
+             "metadata": {},
+             "source": [
+              "# Welcome to Shared Jupyter Environment\n",
+              "\n",
+              "This notebook is stored on shared NFS storage and accessible by all users.\n",
+              "\n",
+              "## Shared Directories\n",
+              "\n",
+              "- `/home/jovyan/shared-notebooks/` - Shared notebooks\n",
+              "- `/home/jovyan/shared-data/` - Shared datasets and results\n",
+              "\n",
+              "## Getting Started\n",
+              "\n",
+              "1. Create your own notebooks in the `projects/` directory\n",
+              "2. Share datasets in the `shared-data/datasets/` directory\n",
+              "3. Save results in `shared-data/results/`"
+             ]
+            },
+            {
+             "cell_type": "code",
+             "execution_count": null,
+             "metadata": {},
+             "outputs": [],
+             "source": [
+              "import pandas as pd\n",
+              "import numpy as np\n",
+              "import matplotlib.pyplot as plt\n",
+              "\n",
+              "# Example: Create sample data\n",
+              "data = pd.DataFrame({\n",
+              "    'x': np.random.randn(100),\n",
+              "    'y': np.random.randn(100)\n",
+              "})\n",
+              "\n",
+              "# Save to shared data directory\n",
+              "data.to_csv('/home/jovyan/shared-data/datasets/sample_data.csv', index=False)\n",
+              "print('Sample data saved to shared storage!')\n",
+              "\n",
+              "# Create a simple plot\n",
+              "plt.figure(figsize=(8, 6))\n",
+              "plt.scatter(data['x'], data['y'], alpha=0.6)\n",
+              "plt.xlabel('X values')\n",
+              "plt.ylabel('Y values')\n",
+              "plt.title('Sample Data Visualization')\n",
+              "plt.show()"
+             ]
+            }
+           ],
+           "metadata": {
+            "kernelspec": {
+             "display_name": "Python 3",
+             "language": "python",
+             "name": "python3"
+            }
+           },
+           "nbformat": 4,
+           "nbformat_minor": 4
+          }
+          EOF
+          
+          echo "Jupyter environment setup complete!"
+          echo "Created directories:"
+          find /shared -type d | sort
+          echo ""
+          echo "Created files:"
+          find /shared -type f | sort
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /shared
+      volumes:
+      - name: shared-storage
+        nfs:
+          server: nfs-server-jupyter.default.svc.cluster.local
+          path: "/"

@@ -1,0 +1,68 @@
+# Docker ignore file for NFS server
+# Reduce build context and improve security
+
+# Documentation
+*.md
+*.txt
+docs/
+examples/
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+target/
+build/
+dist/
+*.tar.gz
+*.zip
+
+# Secrets and keys
+*.key
+*.pem
+*.p12
+*.jks
+secrets/
+.env
+.env.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Kubernetes manifests (not needed in container)
+kubernetes/
+k8s/
+*.yaml
+*.yml
+
+# Scripts (not needed in container unless specifically copied)
+*.sh
+!start-nfs.sh
+!configure-exports.sh

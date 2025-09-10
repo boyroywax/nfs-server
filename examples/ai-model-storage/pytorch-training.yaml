@@ -1,0 +1,275 @@
+---
+# NFS Server for PyTorch Training Dataset Storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server-pytorch-datasets
+  labels:
+    app: nfs-server-pytorch-datasets
+    purpose: training-data
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nfs-server-pytorch-datasets
+  template:
+    metadata:
+      labels:
+        app: nfs-server-pytorch-datasets
+        purpose: training-data
+        version: v1.0.0
+    spec:
+      containers:
+      - name: nfs-server
+        image: boyroywax/nfs-server:1.0.0
+        securityContext:
+          privileged: true
+        env:
+        - name: SHARE_NAME
+          value: "pytorch-datasets"
+        - name: CLIENT_CIDR
+          value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+        - name: NFS_OPTIONS
+          value: "rw,sync,no_subtree_check,no_root_squash,insecure"
+        ports:
+        - name: nfs
+          containerPort: 2049
+        - name: mountd
+          containerPort: 20048
+        - name: rpcbind
+          containerPort: 111
+        volumeMounts:
+        - name: dataset-storage
+          mountPath: /nfsshare/data
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "2Gi"
+            cpu: "1500m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "rpcinfo -p localhost | grep -q nfs"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "showmount -e localhost"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: dataset-storage
+        persistentVolumeClaim:
+          claimName: pytorch-datasets-pvc
+---
+# Large PVC for training datasets
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pytorch-datasets-pvc
+  labels:
+    app: nfs-server-pytorch-datasets
+    purpose: training-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi  # Large storage for datasets
+  # storageClassName: fast-ssd  # Use high-performance storage
+---
+# Service for dataset NFS server
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server-pytorch-datasets
+  labels:
+    app: nfs-server-pytorch-datasets
+    purpose: training-data
+spec:
+  type: ClusterIP
+  selector:
+    app: nfs-server-pytorch-datasets
+  ports:
+  - name: nfs
+    port: 2049
+    targetPort: 2049
+  - name: mountd
+    port: 20048
+    targetPort: 20048
+  - name: rpcbind-tcp
+    port: 111
+    targetPort: 111
+    protocol: TCP
+  - name: rpcbind-udp
+    port: 111
+    targetPort: 111
+    protocol: UDP
+---
+# PyTorch training job example
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pytorch-training-job
+  labels:
+    app: pytorch-training
+    job-type: image-classification
+spec:
+  parallelism: 2  # Distributed training
+  template:
+    metadata:
+      labels:
+        app: pytorch-training
+        job-type: image-classification
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: pytorch-trainer
+        image: pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Starting PyTorch training with shared dataset..."
+          pip install torchvision matplotlib tensorboard
+          
+          # Training script using shared dataset
+          cat > /app/train.py << 'EOF'
+          import torch
+          import torch.nn as nn
+          import torch.optim as optim
+          import torchvision
+          import torchvision.transforms as transforms
+          from torch.utils.data import DataLoader
+          import os
+          
+          # Check for shared dataset
+          data_path = '/shared-data/datasets'
+          os.makedirs(data_path, exist_ok=True)
+          
+          # Data transformations
+          transform = transforms.Compose([
+              transforms.ToTensor(),
+              transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+          ])
+          
+          # Load CIFAR-10 dataset (downloads to shared storage)
+          print(f"Loading dataset to {data_path}")
+          trainset = torchvision.datasets.CIFAR10(
+              root=data_path, train=True, download=True, transform=transform)
+          trainloader = DataLoader(trainset, batch_size=32, shuffle=True, num_workers=2)
+          
+          # Simple CNN model
+          class Net(nn.Module):
+              def __init__(self):
+                  super(Net, self).__init__()
+                  self.conv1 = nn.Conv2d(3, 6, 5)
+                  self.pool = nn.MaxPool2d(2, 2)
+                  self.conv2 = nn.Conv2d(6, 16, 5)
+                  self.fc1 = nn.Linear(16 * 5 * 5, 120)
+                  self.fc2 = nn.Linear(120, 84)
+                  self.fc3 = nn.Linear(84, 10)
+          
+              def forward(self, x):
+                  x = self.pool(torch.relu(self.conv1(x)))
+                  x = self.pool(torch.relu(self.conv2(x)))
+                  x = x.view(-1, 16 * 5 * 5)
+                  x = torch.relu(self.fc1(x))
+                  x = torch.relu(self.fc2(x))
+                  x = self.fc3(x)
+                  return x
+          
+          # Training
+          device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+          print(f"Training on device: {device}")
+          
+          net = Net().to(device)
+          criterion = nn.CrossEntropyLoss()
+          optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+          
+          print("Starting training...")
+          for epoch in range(5):  # Short training for demo
+              running_loss = 0.0
+              for i, data in enumerate(trainloader, 0):
+                  inputs, labels = data[0].to(device), data[1].to(device)
+                  
+                  optimizer.zero_grad()
+                  outputs = net(inputs)
+                  loss = criterion(outputs, labels)
+                  loss.backward()
+                  optimizer.step()
+                  
+                  running_loss += loss.item()
+                  if i % 100 == 99:
+                      print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 100:.3f}')
+                      running_loss = 0.0
+          
+          # Save model to shared storage
+          model_path = '/shared-data/models'
+          os.makedirs(model_path, exist_ok=True)
+          torch.save(net.state_dict(), f'{model_path}/cifar10_model.pth')
+          print(f"Model saved to {model_path}/cifar10_model.pth")
+          EOF
+          
+          cd /app && python train.py
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"  # Adjust based on available GPUs
+        volumeMounts:
+        - name: shared-datasets
+          mountPath: /shared-data
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: 1
+      volumes:
+      - name: shared-datasets
+        nfs:
+          server: nfs-server-pytorch-datasets.default.svc.cluster.local
+          path: "/"
+---
+# ConfigMap with training utilities
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pytorch-training-scripts
+  labels:
+    app: pytorch-training
+data:
+  setup-environment.sh: |
+    #!/bin/bash
+    echo "Setting up PyTorch training environment..."
+    pip install --upgrade pip
+    pip install torchvision matplotlib tensorboard wandb
+    echo "Environment setup complete"
+  
+  distributed-training.sh: |
+    #!/bin/bash
+    echo "Starting distributed training..."
+    python -m torch.distributed.launch \
+      --nproc_per_node=2 \
+      --nnodes=1 \
+      --node_rank=0 \
+      train_distributed.py
+  
+  monitor-training.sh: |
+    #!/bin/bash
+    echo "Monitoring training progress..."
+    watch -n 5 "ls -la /shared-data/models/ && du -sh /shared-data/datasets/"

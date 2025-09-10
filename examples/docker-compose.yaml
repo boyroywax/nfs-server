@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  nfs-server:
+    image: boyroywax/nfs-server:1.0.0
+    container_name: nfs-server
+    privileged: true
+    environment:
+      - SHARE_NAME=docker-shared-storage
+      - CLIENT_CIDR=172.20.0.0/16,10.0.0.0/8,192.168.0.0/16
+      - NFS_OPTIONS=rw,sync,no_subtree_check,no_root_squash,insecure
+      - TZ=UTC
+    ports:
+      - "2049:2049"
+      - "20048:20048"
+      - "111:111/tcp"
+      - "111:111/udp"
+    volumes:
+      - nfs_data:/nfsshare/data
+      # Or mount a host directory:
+      # - ./data:/nfsshare/data
+    networks:
+      - nfs_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "showmount", "-e", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Example client container
+  nfs-client:
+    image: alpine:latest
+    container_name: nfs-client
+    command: ["/bin/sh", "-c", "apk add --no-cache nfs-utils && while true; do sleep 3600; done"]
+    volumes:
+      - type: nfs
+        source: nfs-server:/
+        target: /mnt/nfs
+        volume:
+          nocopy: true
+          driver_opts:
+            type: nfs
+            o: "addr=nfs-server,vers=4,soft,timeo=180,bg,tcp,rw"
+            device: ":/"
+    networks:
+      - nfs_network
+    depends_on:
+      nfs-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  nfs_data:
+    driver: local
+
+networks:
+  nfs_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  nfs-server-dev:
+    image: boyroywax/nfs-server:1.0.0
+    container_name: nfs-server-dev
+    privileged: true
+    environment:
+      - SHARE_NAME=development-storage
+      - CLIENT_CIDR=172.21.0.0/16,127.0.0.1/32
+      - NFS_OPTIONS=rw,async,no_subtree_check,no_root_squash,insecure
+      - TZ=America/New_York
+      # Enable debug mode for development
+      - NFS_DEBUG=1
+    ports:
+      - "2049:2049"
+      - "20048:20048"
+      - "111:111/tcp"
+      - "111:111/udp"
+    volumes:
+      # Mount current directory for easy development
+      - ./dev-data:/nfsshare/data
+      # Or use a named volume
+      # - dev_storage:/nfsshare/data
+    networks:
+      - dev_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "showmount", "-e", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Development tools container
+  dev-tools:
+    image: alpine:latest
+    container_name: dev-tools
+    command: |
+      /bin/sh -c "
+        apk add --no-cache nfs-utils curl jq
+        echo 'Installing development tools...'
+        echo 'NFS server available at nfs-server-dev:2049'
+        echo 'Test with: showmount -e nfs-server-dev'
+        tail -f /dev/null
+      "
+    networks:
+      - dev_network
+    depends_on:
+      nfs-server-dev:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Test client for quick mounting tests
+  test-client:
+    image: ubuntu:22.04
+    container_name: test-client
+    command: |
+      /bin/bash -c "
+        apt-get update -qq
+        apt-get install -y -qq nfs-common
+        mkdir -p /mnt/test-nfs
+        echo 'Ready for NFS testing'
+        echo 'Mount with: mount -t nfs4 nfs-server-dev:/ /mnt/test-nfs'
+        echo 'Unmount with: umount /mnt/test-nfs'
+        tail -f /dev/null
+      "
+    privileged: true
+    networks:
+      - dev_network
+    depends_on:
+      nfs-server-dev:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  dev_storage:
+    driver: local
+
+networks:
+  dev_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# Development helpers
+# Use these commands for quick testing:
+# 
+# Start development environment:
+#   docker-compose -f docker-compose.dev.yaml up -d
+# 
+# Check NFS exports:
+#   docker-compose -f docker-compose.dev.yaml exec dev-tools showmount -e nfs-server-dev
+# 
+# Test mount from test-client:
+#   docker-compose -f docker-compose.dev.yaml exec test-client bash
+#   mount -t nfs4 nfs-server-dev:/ /mnt/test-nfs
+#   echo "Hello NFS" > /mnt/test-nfs/test.txt
+#   cat /mnt/test-nfs/test.txt
+# 
+# View logs:
+#   docker-compose -f docker-compose.dev.yaml logs -f nfs-server-dev
+# 
+# Stop environment:
+#   docker-compose -f docker-compose.dev.yaml down
