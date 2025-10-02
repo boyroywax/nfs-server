@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-10-02
+
+### Added
+- **Slim Variant** - New ultra-lightweight variant at 22.7 MB (67% smaller than v1.0.1)
+- **Multi-Variant Support** - Two optimized variants: Standard (62.8 MB) and Slim (22.7 MB)
+- **Source-Compiled NFS** - Slim variant compiles nfs-utils from source without Python
+- **OPTIMIZATION_GUIDE.md** - Complete optimization documentation and analysis
+
+### Changed
+- **Standard Version Optimized** - Reduced from 68.6 MB to 62.8 MB (8.5% reduction)
+- **POSIX Shell Scripts** - Removed bash dependency, using POSIX sh for better compatibility
+- **Package Reduction** - Removed 26 unnecessary packages from standard version
+- Base image: `alpine:3.22` (continues from v1.0.1)
+- Docker images: 
+  - `boyroywax/nfs-server:1.0.2` (standard, 62.8 MB)
+  - `boyroywax/nfs-server:1.0.2-slim` (lightweight, 22.7 MB)
+
+### Removed (Standard Version)
+- bash shell (using POSIX sh)
+- Unnecessary util-linux components
+- 26 redundant packages
+
+### Removed (Slim Variant)
+- Python 3.12 (~30 MB saved)
+- NFSv4 support (NFSv3 only)
+- Kerberos/GSS authentication
+- bash shell
+- 47 total packages removed vs v1.0.1
+
+### Technical Details (Slim)
+- Multi-stage Docker build
+- nfs-utils 2.6.4 compiled from source
+- Build flags: `--disable-nfsv4 --disable-gss --disable-reexport`
+- Only 36 packages in final image
+
 ## [1.0.1] - 2025-10-02
 
 ### Security

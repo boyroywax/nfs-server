@@ -6,18 +6,24 @@
 
 A lightweight, secure NFS server built on Alpine Linux, designed for Kubernetes environments with modular model storage architecture. Perfect for AI/ML workloads, microservices shared storage, and cloud-native applications.
 
+**Now available in two optimized variants:**
+- **Standard (v1.0.2)** - 62.8 MB - Full features with NFSv4 support
+- **Slim (v1.0.2-slim)** - 22.7 MB - Ultra-lightweight NFSv3 (67% smaller!)
+
 ## 🚀 Features
 
-- **🏔️ Alpine Linux 3.22.1** - Minimal, secure base image (< 50MB)
+- **🏔️ Alpine Linux 3.22** - Minimal, secure base image
 - **🔒 Security Hardened** - Non-root user, minimal attack surface, Docker Scout verified
 - **⚡ High Performance** - NFSv3/NFSv4 support with optimized configuration
 - **🐳 Kubernetes Ready** - Purpose-built for containerized deployments
 - **📦 Modular Design** - One NFS server per model/dataset for easy scaling
 - **🛡️ Enterprise Ready** - Health checks, graceful shutdown, comprehensive logging
 - **🔧 Configurable** - Environment-driven configuration for maximum flexibility
+- **📉 Size Optimized** - Choose between standard (62.8 MB) or slim (22.7 MB) variants
 
 ## 📋 Table of Contents
 
+- [Variants](#variants)
 - [Quick Start](#quick-start)
 - [Kubernetes Deployment](#kubernetes-deployment)
 - [Configuration](#configuration)
@@ -27,50 +33,82 @@ A lightweight, secure NFS server built on Alpine Linux, designed for Kubernetes 
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
+## 🎯 Variants
+
+Choose the right variant for your needs:
+
+| Variant | Tag | Size | Python | NFSv4 | Kerberos | Best For |
+|---------|-----|------|--------|-------|----------|----------|
+| **Standard** | `1.0.2` | 62.8 MB | ✅ Yes | ✅ Yes | ✅ Yes | Production, enterprise, full features |
+| **Slim** | `1.0.2-slim` | 22.7 MB | ❌ No | ❌ No (v3 only) | ❌ No | Edge, IoT, CI/CD, size-critical |
+
+### Standard Version (Recommended)
+- Full NFSv3/NFSv4 support
+- Kerberos/GSS authentication
+- Python tools (nfsiostat, etc.)
+- 8.5% smaller than v1.0.1
+- POSIX shell scripts
+
+### Slim Variant  
+- **67% smaller** than v1.0.1
+- NFSv3 only (no v4)
+- No Python (built from source)
+- No Kerberos (basic auth)
+- Perfect for size-critical deployments
+
 ## ⚡ Quick Start
 
-### Docker Run
+### Standard Version (Default)
+
+#### Docker Run
 
 ```bash
-# Basic NFS server
+# Basic NFS server with full features
 docker run -d 
   --name nfs-server 
   --privileged 
   -e SHARE_NAME=mydata 
   -e CLIENT_CIDR=10.0.0.0/8 
-    -p 2049:2049 
+  -p 2049:2049 
   -p 20048:20048 
   -p 111:111 
   -v /path/to/data:/nfsshare/data 
-  boyroywax/nfs-server:1.0.1
+  boyroywax/nfs-server:1.0.2
 ```
 
-### Docker Compose
-
-```yaml
-services:
-  nfs-server:
-    image: boyroywax/nfs-server:1.0.1
-```
-
-### Docker Compose
+#### Docker Compose
 
 ```yaml
 version: '3.8'
 services:
   nfs-server:
-    image: boyroywax/nfs-server:1.0.0
+    image: boyroywax/nfs-server:1.0.2
     privileged: true
     environment:
-      - SHARE_NAME=shared-storage
-      - CLIENT_CIDR=172.20.0.0/16,10.0.0.0/8
+      - SHARE_NAME=mydata
+      - CLIENT_CIDR=10.0.0.0/8
     ports:
       - "2049:2049"
       - "20048:20048"
       - "111:111"
     volumes:
-      - ./data:/nfsshare/data
-    restart: unless-stopped
+      - /path/to/data:/nfsshare/data
+```
+
+### Slim Variant (Lightweight)
+
+```bash
+# Ultra-lightweight NFS server (NFSv3 only)
+docker run -d 
+  --name nfs-server-slim 
+  --privileged 
+  -e SHARE_NAME=mydata 
+  -e CLIENT_CIDR=10.0.0.0/8 
+  -p 2049:2049 
+  -p 20048:20048 
+  -p 111:111 
+  -v /path/to/data:/nfsshare/data 
+  boyroywax/nfs-server:1.0.2-slim
 ```
 
 ## ☸️ Kubernetes Deployment
