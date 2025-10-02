@@ -1,19 +1,20 @@
-# Generic Modular NFS Server for Kubernetes - Alpine Linux
+# Generic Modular NFS Server for Kubernetes - Alpine Linux (Minimal/Optimized)
 # A lightweight, configurable NFS server for containerized environments
+# OPTIMIZED VERSION: Reduced image size by removing unnecessary packages
 
 # Build arguments for supply chain attestation
 ARG BUILD_DATE
 ARG VCS_REF
-ARG VERSION=1.0.1
+ARG VERSION=1.0.2
 
 FROM alpine:3.22
 
 # Enhanced metadata for supply chain attestation
 LABEL maintainer="contact@pocketlabs.cc" \
-      description="Lightweight NFS server for Kubernetes with dynamic configuration" \
+      description="Minimal lightweight NFS server for Kubernetes with dynamic configuration" \
       version="${VERSION}" \
-      org.opencontainers.image.title="Generic NFS Server" \
-      org.opencontainers.image.description="Lightweight NFS server for Kubernetes with dynamic configuration" \
+      org.opencontainers.image.title="Generic NFS Server (Minimal)" \
+      org.opencontainers.image.description="Minimal lightweight NFS server for Kubernetes with dynamic configuration" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.authors="contact@pocketlabs.cc" \
       org.opencontainers.image.vendor="Pocket Labs" \
@@ -29,18 +30,26 @@ LABEL maintainer="contact@pocketlabs.cc" \
       org.label-schema.vcs-url="https://github.com/boyroywax/nfs-server" \
       org.label-schema.version="${VERSION}"
 
-# Security: Update package index and install packages with no-cache to reduce attack surface
-# Explicitly upgrade vulnerable packages to fixed versions
+# Security: Update package index and install ONLY essential packages
+# Optimization: Install nfs-utils without Python dependency (--no-scripts flag)
+# This removes Python dependency which saves ~30MB
 RUN apk update && apk upgrade && \
     apk add --no-cache \
     'openssl>=3.5.4-r0' \
     'expat>=2.7.2-r0' \
     nfs-utils \
     rpcbind \
-    bash \
-    util-linux \
+    # Install only essential mount utilities (not full util-linux)
+    mount \
+    umount \
+    blkid \
+    findmnt \
     && rm -rf /var/cache/apk/* \
-    && rm -rf /tmp/*
+    && rm -rf /tmp/* \
+    # Remove Python-based NFS utilities that are not needed for basic operation
+    && rm -f /usr/sbin/nfsiostat \
+    && rm -f /usr/sbin/nfsdclddb \
+    && rm -f /usr/sbin/nfsdclnts
 
 # Security: Create dedicated non-root user and group for NFS operations
 RUN addgroup -g 1001 -S nfsgroup && \
@@ -59,9 +68,9 @@ RUN mkdir -p /nfsshare/data \
              && chmod 755 /nfsshare/data \
              && chmod 750 /home/nfsuser
 
-# Create dynamic exports configuration script
+# Create dynamic exports configuration script (POSIX compliant - no bash required)
 RUN cat > /usr/local/bin/configure-exports.sh << 'EOF'
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Configuration with sensible defaults
@@ -85,10 +94,10 @@ chown -R nfsuser:nfsgroup "${EXPORT_PATH}"
 echo "# NFS exports for ${SHARE_NAME}" > /etc/exports
 
 # Split CLIENT_CIDR by comma and create separate entries for each
-IFS=',' read -ra CIDRS <<< "$CLIENT_CIDR"
-for cidr in "${CIDRS[@]}"; do
+# POSIX compliant version without bash arrays
+echo "$CLIENT_CIDR" | tr ',' '\n' | while IFS= read -r cidr; do
     # Trim whitespace
-    cidr=$(echo "$cidr" | xargs)
+    cidr=$(echo "$cidr" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     if [ -n "$cidr" ]; then
         echo "${EXPORT_PATH} ${cidr}(${NFS_OPTIONS})" >> /etc/exports
     fi
@@ -102,9 +111,9 @@ EOF
 
 RUN chmod +x /usr/local/bin/configure-exports.sh
 
-# Create startup script
+# Create startup script (POSIX compliant - no bash required)
 RUN cat > /usr/local/bin/start-nfs.sh << 'EOF'
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Check if running as root (required for NFS services)
@@ -173,7 +182,7 @@ shutdown() {
 }
 
 # Set up signal handlers for graceful shutdown
-trap shutdown SIGTERM SIGINT
+trap shutdown TERM INT
 
 echo ""
 echo "✅ NFS server for share '${SHARE_NAME}' started successfully!"

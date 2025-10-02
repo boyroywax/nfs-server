@@ -4,7 +4,7 @@ metadata:
   name: nfs-server
   labels:
     app: nfs-server
-    version: v1.0.1
+    version: v1.0.2
 spec:
   replicas: 1
   selector:
@@ -14,11 +14,11 @@ spec:
     metadata:
       labels:
         app: nfs-server
-        version: v1.0.1
+        version: v1.0.2
     spec:
       containers:
       - name: nfs-server
-        image: boyroywax/nfs-server:1.0.1
+        image: boyroywax/nfs-server:1.0.2
         securityContext:
           privileged: true
         env:
