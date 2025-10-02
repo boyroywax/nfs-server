@@ -89,8 +89,13 @@ Fixes:
 
 This is a critical security update. All users should upgrade immediately."
 
-# Push changes and tags
-git push origin v1.0.1
+# Push the current branch first (if needed)
+git push origin v1.0.1:v1.0.1
+
+# Push the tag specifically
+git push origin refs/tags/v1.0.1
+
+# Or push all tags
 git push origin --tags
 ```
 
