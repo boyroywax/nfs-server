@@ -4,9 +4,9 @@
 # Build arguments for supply chain attestation
 ARG BUILD_DATE
 ARG VCS_REF
-ARG VERSION=1.0.0
+ARG VERSION=1.0.1
 
-FROM alpine:3.22.1
+FROM alpine:3.22
 
 # Enhanced metadata for supply chain attestation
 LABEL maintainer="contact@pocketlabs.cc" \
@@ -30,8 +30,11 @@ LABEL maintainer="contact@pocketlabs.cc" \
       org.label-schema.version="${VERSION}"
 
 # Security: Update package index and install packages with no-cache to reduce attack surface
+# Explicitly upgrade vulnerable packages to fixed versions
 RUN apk update && apk upgrade && \
     apk add --no-cache \
+    'openssl>=3.5.4-r0' \
+    'expat>=2.7.2-r0' \
     nfs-utils \
     rpcbind \
     bash \

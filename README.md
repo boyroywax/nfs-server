@@ -38,11 +38,19 @@ docker run -d
   --privileged 
   -e SHARE_NAME=mydata 
   -e CLIENT_CIDR=10.0.0.0/8 
-  -p 2049:2049 
+    -p 2049:2049 
   -p 20048:20048 
   -p 111:111 
   -v /path/to/data:/nfsshare/data 
-  boyroywax/nfs-server:1.0.0
+  boyroywax/nfs-server:1.0.1
+```
+
+### Docker Compose
+
+```yaml
+services:
+  nfs-server:
+    image: boyroywax/nfs-server:1.0.1
 ```
 
 ### Docker Compose
@@ -329,7 +337,7 @@ docker buildx build
   --builder attestation-builder 
   --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" 
   --build-arg VCS_REF="$(git rev-parse HEAD)" 
-  --build-arg VERSION="1.0.0" 
+  --build-arg VERSION="1.0.1" 
   --platform linux/amd64 
   --attest type=provenance,mode=max 
   --attest type=sbom 

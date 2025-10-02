@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-10-02
+
+### Security
+- **Alpine Base Image Update** - Updated from Alpine Linux 3.22.1 to 3.22 (latest) to address OpenSSL security vulnerabilities
+- **OpenSSL Security Patch** - Explicitly upgraded openssl to version 3.5.4-r0 to resolve CVE-2025-9230 (CVSS 7.5)
+- **Expat Security Patch** - Explicitly upgraded expat to version 2.7.2-r0 to resolve CVE-2025-59375 (CVSS 7.5)
+- **CVE Resolution** - Resolves multiple high-severity CVEs in openssl and expat packages
+
+### Changed
+- Base image: `alpine:3.22` (from 3.22.1, now tracks latest 3.22.x)
+- Docker image: `boyroywax/nfs-server:1.0.1`
+- Package updates: openssl>=3.5.4-r0, expat>=2.7.2-r0
+
 ## [1.0.0] - 2024-12-28
 
 ### Added
@@ -57,4 +70,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configurable Access**: Client IP restrictions via environment variables
 - **Best Practices**: Security contexts, resource limits, network policies
 
+[1.0.1]: https://github.com/boyroywax/nfs-server/releases/tag/v1.0.1
 [1.0.0]: https://github.com/boyroywax/nfs-server/releases/tag/v1.0.0

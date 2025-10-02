@@ -32,7 +32,7 @@ This document describes the complete structure of the Alpine NFS Server reposito
 ## 🎯 Key Features
 
 ### Production Ready
-- **Docker Hub**: `boyroywax/nfs-server:1.0.0` with attestation and SBOM
+- **Docker Hub**: `boyroywax/nfs-server:1.0.1` with attestation and SBOM
 - **Security**: Docker Scout verified, minimal Alpine base, non-root user
 - **Health Checks**: Comprehensive probes for Kubernetes deployment
 - **Documentation**: Complete examples and troubleshooting guides
