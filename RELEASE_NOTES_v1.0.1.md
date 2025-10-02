@@ -5,16 +5,19 @@
 
 ## 🚨 Security Update
 
-This is a security patch release that addresses OpenSSL vulnerabilities in the Alpine Linux base image.
+This is a security patch release that addresses high-severity OpenSSL and Expat vulnerabilities in the Alpine Linux base image.
 
 ## 📦 What's Changed
 
 ### Security Fixes
-- **Alpine Base Image Update** - Updated from Alpine Linux 3.22.1 to 3.22 (latest) to address OpenSSL security vulnerabilities
-- **CVE Resolution** - Resolves multiple CVEs in the openssl package through base image update
+- **Alpine Base Image Update** - Updated from Alpine Linux 3.22.1 to 3.22 (latest) to address security vulnerabilities
+- **CVE-2025-9230 (High, CVSS 7.5)** - OpenSSL vulnerability resolved by upgrading to version 3.5.4-r0
+- **CVE-2025-59375 (High, CVSS 7.5)** - Expat vulnerability resolved by upgrading to version 2.7.2-r0
 
 ### Updated Components
 - **Base Image**: `alpine:3.22` (from 3.22.1, now tracks latest 3.22.x)
+- **OpenSSL**: `3.5.4-r0` (from 3.5.2-r0)
+- **Expat**: `2.7.2-r0` (from 2.7.1-r0)
 - **Docker Image**: `boyroywax/nfs-server:1.0.1`
 - **Version**: 1.0.1
 
@@ -107,13 +110,16 @@ docker-compose up -d
 | Component | v1.0.0 | v1.0.1 |
 |-----------|--------|--------|
 | Alpine Base | 3.22.1 | 3.22 (latest) |
-| OpenSSL | Vulnerable | Patched |
+| OpenSSL | 3.5.2-r0 (vulnerable) | 3.5.4-r0 (patched) |
+| Expat | 2.7.1-r0 (vulnerable) | 2.7.2-r0 (patched) |
 | Configuration | Same | Same |
 | Features | Same | Same |
 
 ## 🛡️ Security Benefits
 
-- **Patched OpenSSL vulnerabilities** in Alpine Linux base image
+- **CVE-2025-9230 Fixed** - High severity (CVSS 7.5) OpenSSL vulnerability patched
+- **CVE-2025-59375 Fixed** - High severity (CVSS 7.5) Expat vulnerability patched
+- **Zero Critical/High Vulnerabilities** - All known high-severity CVEs resolved
 - **Same security posture** as v1.0.0 with updated dependencies
 - **No breaking changes** to existing deployments
 - **Minimal image size** maintained (< 50MB compressed)
@@ -139,7 +145,11 @@ docker-compose up -d
 
 ## ⚠️ Important
 
-**Action Required:** All users running v1.0.0 should upgrade to v1.0.1 to address OpenSSL security vulnerabilities.
+**Action Required:** All users running v1.0.0 should upgrade to v1.0.1 to address the following high-severity vulnerabilities:
+- **CVE-2025-9230** (OpenSSL, CVSS 7.5)
+- **CVE-2025-59375** (Expat, CVSS 7.5)
+
+This security update ensures your NFS server container has no critical or high vulnerabilities.
 
 ---
 

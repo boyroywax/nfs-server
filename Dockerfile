@@ -30,8 +30,11 @@ LABEL maintainer="contact@pocketlabs.cc" \
       org.label-schema.version="${VERSION}"
 
 # Security: Update package index and install packages with no-cache to reduce attack surface
+# Explicitly upgrade vulnerable packages to fixed versions
 RUN apk update && apk upgrade && \
     apk add --no-cache \
+    'openssl>=3.5.4-r0' \
+    'expat>=2.7.2-r0' \
     nfs-utils \
     rpcbind \
     bash \
