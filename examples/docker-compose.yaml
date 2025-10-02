@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   nfs-server:
-    image: boyroywax/nfs-server:1.0.0
+    # Production NFS server for Kubernetes environments
+    image: boyroywax/nfs-server:1.0.1
     container_name: nfs-server
     privileged: true
     environment:

@@ -4,9 +4,9 @@
 # Build arguments for supply chain attestation
 ARG BUILD_DATE
 ARG VCS_REF
-ARG VERSION=1.0.0
+ARG VERSION=1.0.1
 
-FROM alpine:3.22.1
+FROM alpine:3.22
 
 # Enhanced metadata for supply chain attestation
 LABEL maintainer="contact@pocketlabs.cc" \

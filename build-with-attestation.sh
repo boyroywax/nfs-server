@@ -12,7 +12,7 @@ FULL_IMAGE="${DOCKER_USERNAME}/${IMAGE_NAME}:${TAG}"
 # Build metadata for supply chain attestation
 BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-VERSION="1.0.0"
+VERSION="1.0.1"
 
 echo "Building Enhanced NFS Server with Supply Chain Attestation..."
 echo "Image: ${FULL_IMAGE}"
